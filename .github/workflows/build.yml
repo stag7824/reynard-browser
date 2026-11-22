@@ -33,7 +33,7 @@ permissions:
 
 jobs:
   prepare:
-    if: ${{ github.repository_owner == 'minh-ton' }}
+    if: ${{ github.repository_owner == 'minh-ton' || github.workflow == 'Build Custom SideStore IPA' }}
     name: Select build variants
     runs-on: ubuntu-latest
     outputs:

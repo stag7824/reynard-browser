@@ -1,0 +1,83 @@
+name: Build Custom SideStore IPA
+
+# Builds only the standard SideStore/AltStore IPA from this branch, publishes it as a
+# GitHub Release, and refreshes the SideStore source attached to the "source" release.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: custom-sidestore-build
+  cancel-in-progress: false
+
+jobs:
+  build:
+    uses: ./.github/workflows/build.yml
+    with:
+      checkout_ref: ${{ github.sha }}
+      build_normal_ipa: true
+      build_trollstore_tipa: false
+      build_jailbroken_ipa: false
+
+  release:
+    name: Publish release and SideStore source
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      REPO: ${{ github.repository }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Download IPA
+        uses: actions/download-artifact@v4
+        with:
+          name: Reynard.ipa
+          path: dist
+
+      - name: Determine version
+        id: version
+        run: |
+          version=$(sed -n 's/^CURRENT_VERSION = //p' browser/Configuration/Reynard.xcconfig)
+          build=$(echo "$GITHUB_SHA" | cut -c1-7)
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "build=$build" >> "$GITHUB_OUTPUT"
+          echo "tag=custom-$version-$build" >> "$GITHUB_OUTPUT"
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          name: Reynard ${{ steps.version.outputs.version }} (custom ${{ steps.version.outputs.build }})
+          body: |
+            Custom build of Reynard ${{ steps.version.outputs.version }} from commit ${{ steps.version.outputs.build }}.
+            Includes the customizable bottom toolbar (Settings > Appearance > Customize Toolbar).
+          make_latest: true
+          fail_on_unmatched_files: true
+          files: dist/Reynard.ipa
+
+      - name: Generate SideStore source
+        run: |
+          gh api "repos/$REPO/releases" --paginate --jq '.[]' > releases.jsonl
+          python3 .github/update_custom_source.py releases.jsonl dist/source.json
+
+      - name: Publish SideStore source
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: source
+          target_commitish: ${{ github.sha }}
+          name: SideStore source
+          body: |
+            Add this source in SideStore to get custom Reynard builds as updates:
+            https://github.com/${{ github.repository }}/releases/download/source/source.json
+          make_latest: false
+          files: dist/source.json
