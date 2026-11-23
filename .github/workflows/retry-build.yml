@@ -1,0 +1,44 @@
+name: Retry Custom Build
+
+# Gecko builds sometimes hit the 6-hour job limit (cold compiler cache) or never get a
+# macOS runner. Re-run the failed build job, up to 3 attempts in total; each retry reuses
+# the compiler cache filled by the previous attempt. Failures elsewhere (merge, release)
+# are left alone.
+
+on:
+  workflow_run:
+    workflows:
+      - Sync Upstream and Build
+      - Build Custom SideStore IPA
+    types:
+      - completed
+
+permissions:
+  actions: write
+
+jobs:
+  retry:
+    name: Re-run failed build
+    if: >-
+      ${{ (github.event.workflow_run.conclusion == 'failure' ||
+           github.event.workflow_run.conclusion == 'cancelled' ||
+           github.event.workflow_run.conclusion == 'timed_out') &&
+          github.event.workflow_run.run_attempt < 3 }}
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      REPO: ${{ github.repository }}
+      RUN_ID: ${{ github.event.workflow_run.id }}
+      ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+    steps:
+      - name: Re-run if the build job failed
+        run: |
+          failed=$(gh api "repos/$REPO/actions/runs/$RUN_ID/attempts/$ATTEMPT/jobs" \
+            --jq '[.jobs[] | select(.conclusion == "failure" or .conclusion == "cancelled" or .conclusion == "timed_out") | .name]')
+          echo "Failed jobs: $failed"
+          if echo "$failed" | grep -q "Build Standard"; then
+            gh run rerun "$RUN_ID" --repo "$REPO" --failed
+            echo "Started attempt $((ATTEMPT + 1))."
+          else
+            echo "The build job did not fail; not retrying."
+          fi

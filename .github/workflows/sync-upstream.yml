@@ -1,0 +1,127 @@
+name: Sync Upstream and Build
+
+# Every few hours, look for the newest upstream commit that built successfully
+# (Build Nightly or Build Release in minh-ton/reynard-browser). If it isn't merged yet,
+# merge it into this branch, push, and build + publish a custom IPA from the result.
+# Merge conflicts or upstream workflow changes open an issue instead of guessing.
+
+on:
+  schedule:
+    - cron: '30 */6 * * *'
+  workflow_dispatch:
+    inputs:
+      force_build:
+        description: Build even if there is nothing new upstream
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sync-upstream
+  cancel-in-progress: false
+
+env:
+  UPSTREAM_REPO: minh-ton/reynard-browser
+
+jobs:
+  sync:
+    name: Merge upstream
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+    outputs:
+      build: ${{ steps.merge.outputs.build }}
+      sha: ${{ steps.merge.outputs.sha }}
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      REPO: ${{ github.repository }}
+    steps:
+      - name: Find newest upstream commit that built successfully
+        id: upstream
+        run: |
+          sha=$(
+            for wf in build-nightly.yml build-release.yml; do
+              gh api "repos/$UPSTREAM_REPO/actions/workflows/$wf/runs?status=success&per_page=1" \
+                --jq '.workflow_runs[] | "\(.created_at) \(.head_sha)"'
+            done | sort -r | head -n1 | cut -d' ' -f2
+          )
+          if [ -z "$sha" ]; then
+            echo "Could not find a successful upstream build" >&2
+            exit 1
+          fi
+          echo "Newest successfully built upstream commit: $sha"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
+      - name: Check out this branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+          token: ${{ secrets.SYNC_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - name: Merge upstream commit
+        id: merge
+        env:
+          UPSTREAM_SHA: ${{ steps.upstream.outputs.sha }}
+          FORCE_BUILD: ${{ inputs.force_build || false }}
+          HAS_SYNC_TOKEN: ${{ secrets.SYNC_TOKEN != '' }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch --quiet "https://github.com/$UPSTREAM_REPO.git" "$UPSTREAM_SHA"
+
+          open_issue() {
+            title="$1"; body="$2"
+            existing=$(gh issue list --repo "$REPO" --state open --search "in:title \"$title\"" --json number --jq '.[0].number')
+            if [ -n "$existing" ]; then
+              gh issue comment "$existing" --repo "$REPO" --body "$body"
+            else
+              gh issue create --repo "$REPO" --title "$title" --body "$body"
+            fi
+          }
+
+          if git merge-base --is-ancestor "$UPSTREAM_SHA" HEAD; then
+            echo "Upstream $UPSTREAM_SHA is already merged."
+            if [ "$FORCE_BUILD" = "true" ]; then
+              echo "build=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "build=false" >> "$GITHUB_OUTPUT"
+            fi
+            echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if ! git merge --no-edit -m "Merge upstream ${UPSTREAM_SHA:0:7}" "$UPSTREAM_SHA"; then
+            conflicts=$(git diff --name-only --diff-filter=U | sed 's/^/- /')
+            git merge --abort
+            open_issue "Upstream merge needs attention" "Merging upstream commit https://github.com/$UPSTREAM_REPO/commit/$UPSTREAM_SHA into \`${GITHUB_REF_NAME}\` hit conflicts in:
+
+          $conflicts
+
+          Resolve the merge by hand and push; the next scheduled sync will build it."
+            exit 1
+          fi
+
+          if [ "$HAS_SYNC_TOKEN" != "true" ] && ! git diff --quiet HEAD^1 HEAD -- .github/workflows; then
+            git reset --quiet --hard HEAD^1
+            open_issue "Upstream merge needs attention" "Upstream commit https://github.com/$UPSTREAM_REPO/commit/$UPSTREAM_SHA changes files under \`.github/workflows\`. The default Actions token is not allowed to push workflow changes, so merge it by hand (or add a \`SYNC_TOKEN\` secret with the workflow scope)."
+            exit 1
+          fi
+
+          git push origin "HEAD:${GITHUB_REF_NAME}"
+          echo "build=true" >> "$GITHUB_OUTPUT"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build and publish
+    needs: sync
+    if: ${{ needs.sync.outputs.build == 'true' }}
+    permissions:
+      contents: write
+    uses: ./.github/workflows/sidestore-custom.yml
+    with:
+      ref: ${{ needs.sync.outputs.sha }}

@@ -1,23 +1,29 @@
 name: Build Custom SideStore IPA
 
-# Builds only the standard SideStore/AltStore IPA from this branch, publishes it as a
-# GitHub Release, and refreshes the SideStore source attached to the "source" release.
+# Builds only the standard SideStore/AltStore IPA, publishes it as a GitHub Release,
+# and refreshes the SideStore source attached to the "source" release.
+# Run it by hand, or let "Sync Upstream and Build" call it after merging upstream changes.
 
 on:
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      ref:
+        description: Commit to build (defaults to the triggering commit)
+        required: false
+        type: string
 
 permissions:
   contents: read
 
-concurrency:
-  group: custom-sidestore-build
-  cancel-in-progress: false
+env:
+  BUILD_REF: ${{ inputs.ref || github.sha }}
 
 jobs:
   build:
     uses: ./.github/workflows/build.yml
     with:
-      checkout_ref: ${{ github.sha }}
+      checkout_ref: ${{ inputs.ref || github.sha }}
       build_normal_ipa: true
       build_trollstore_tipa: false
       build_jailbroken_ipa: false
@@ -35,7 +41,7 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ env.BUILD_REF }}
 
       - name: Download IPA
         uses: actions/download-artifact@v4
@@ -47,7 +53,7 @@ jobs:
         id: version
         run: |
           version=$(sed -n 's/^CURRENT_VERSION = //p' browser/Configuration/Reynard.xcconfig)
-          build=$(echo "$GITHUB_SHA" | cut -c1-7)
+          build=$(echo "$BUILD_REF" | cut -c1-7)
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "build=$build" >> "$GITHUB_OUTPUT"
           echo "tag=custom-$version-$build" >> "$GITHUB_OUTPUT"
@@ -56,7 +62,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.tag }}
-          target_commitish: ${{ github.sha }}
+          target_commitish: ${{ env.BUILD_REF }}
           name: Reynard ${{ steps.version.outputs.version }} (custom ${{ steps.version.outputs.build }})
           body: |
             Custom build of Reynard ${{ steps.version.outputs.version }} from commit ${{ steps.version.outputs.build }}.
@@ -87,7 +93,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: source
-          target_commitish: ${{ github.sha }}
+          target_commitish: ${{ env.BUILD_REF }}
           name: SideStore source
           body: |
             Add this source in SideStore to get custom Reynard builds as updates:
