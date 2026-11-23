@@ -11,7 +11,6 @@ final class AppearancePreferencesViewController: SettingsTableViewController {
     private enum Section: CaseIterable, Equatable {
         case appAppearance
         case addressBar
-        case toolbar
         case gestures
         case tabs
         
@@ -21,8 +20,6 @@ final class AppearancePreferencesViewController: SettingsTableViewController {
                 return SettingsSectionText()
             case .addressBar:
                 return SettingsSectionText(headerTitle: NSLocalizedString("Address Bar", comment: ""))
-            case .toolbar:
-                return SettingsSectionText(headerTitle: NSLocalizedString("Toolbar", comment: ""))
             case .gestures:
                 return SettingsSectionText(headerTitle: NSLocalizedString("Gestures", comment: ""))
             case .tabs:
@@ -35,7 +32,6 @@ final class AppearancePreferencesViewController: SettingsTableViewController {
         case appAppearance
         case BrowserChromePosition
         case showFullWebsiteAddress
-        case customizeToolbar
         case pullToRefresh
         case scrollToHideToolbar
         case swipeAddressBarSideways
@@ -131,11 +127,6 @@ final class AppearancePreferencesViewController: SettingsTableViewController {
             cell.selectionStyle = .none
             cell.accessoryView = showFullWebsiteAddressSwitch
             return cell
-        case .customizeToolbar:
-            let cell = SettingsTableViewCell(style: .value1, reuseIdentifier: nil)
-            cell.textLabel?.text = NSLocalizedString("Customize Toolbar", comment: "")
-            cell.accessoryType = .disclosureIndicator
-            return cell
         case .pullToRefresh:
             let cell = SettingsTableViewCell(style: .default, reuseIdentifier: nil)
             cell.textLabel?.text = NSLocalizedString("Pull to Refresh", comment: "")
@@ -174,10 +165,6 @@ final class AppearancePreferencesViewController: SettingsTableViewController {
         guard displayedSections.indices.contains(indexPath.section),
               rows(for: displayedSections[indexPath.section]).indices.contains(indexPath.row) else {
             return
-        }
-        
-        if rows(for: displayedSections[indexPath.section])[indexPath.row] == .customizeToolbar {
-            navigationController?.pushViewController(ToolbarCustomizationViewController(), animated: true)
         }
     }
     
@@ -265,11 +252,6 @@ final class AppearancePreferencesViewController: SettingsTableViewController {
                 return [.showFullWebsiteAddress]
             }
             return [.BrowserChromePosition, .showFullWebsiteAddress]
-        case .toolbar:
-            if UIDevice.current.userInterfaceIdiom == .pad {
-                return []
-            }
-            return [.customizeToolbar]
         case .gestures:
             var rows: [Row] = [.pullToRefresh, .scrollToHideToolbar]
             guard position == .bottom,

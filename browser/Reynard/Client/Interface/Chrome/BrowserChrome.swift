@@ -66,11 +66,6 @@ final class BrowserChrome: UIView, UIGestureRecognizerDelegate {
     var onDownloads: (() -> Void)?
     var onNewTab: (() -> Void)?
     var onTabOverview: (() -> Void)?
-    var onBookmarks: (() -> Void)?
-    var onHistory: (() -> Void)?
-    var onReload: (() -> Void)?
-    var onShowFindInPage: (() -> Void)?
-    var onReaderMode: (() -> Void)?
     var onOverlayDismiss: (() -> Void)?
     var onPageZoomOut: (() -> Void)?
     var onPageZoomIn: (() -> Void)?
@@ -146,16 +141,6 @@ final class BrowserChrome: UIView, UIGestureRecognizerDelegate {
         configureConstraints()
         configureToolbarActions()
         configureOverlayDismissGesture()
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(bottomToolbarItemsDidChange),
-            name: .bottomToolbarItemsDidChange,
-            object: nil
-        )
-    }
-    
-    @objc private func bottomToolbarItemsDidChange() {
-        bottomToolbar.setItems(Prefs.AppearanceSettings.bottomToolbarItems)
     }
     
     required init?(coder: NSCoder) {
@@ -546,11 +531,6 @@ final class BrowserChrome: UIView, UIGestureRecognizerDelegate {
             itemsProvider: itemsProvider,
             onSelect: onSelect
         )
-        bottomToolbar.configureRecentlyClosedTabsMenu(
-            isAvailable: isAvailable,
-            itemsProvider: itemsProvider,
-            onSelect: onSelect
-        )
     }
     
     func configureLibraryMenus(onSelect: @escaping (LibrarySection) -> Void) {
@@ -623,12 +603,6 @@ final class BrowserChrome: UIView, UIGestureRecognizerDelegate {
         bottomToolbar.onLibrary = { [weak self] in self?.onLibrary?() }
         bottomToolbar.onDownloads = { [weak self] in self?.onDownloads?() }
         bottomToolbar.onTabOverview = { [weak self] in self?.onTabOverview?() }
-        bottomToolbar.onNewTab = { [weak self] in self?.onNewTab?() }
-        bottomToolbar.onBookmarks = { [weak self] in self?.onBookmarks?() }
-        bottomToolbar.onHistory = { [weak self] in self?.onHistory?() }
-        bottomToolbar.onReload = { [weak self] in self?.onReload?() }
-        bottomToolbar.onFindInPage = { [weak self] in self?.onShowFindInPage?() }
-        bottomToolbar.onReaderMode = { [weak self] in self?.onReaderMode?() }
         
         actionBar.onPageZoomOut = { [weak self] in self?.onPageZoomOut?() }
         actionBar.onPageZoomIn = { [weak self] in self?.onPageZoomIn?() }
