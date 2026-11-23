@@ -66,7 +66,7 @@ jobs:
           name: Reynard ${{ steps.version.outputs.version }} (custom ${{ steps.version.outputs.build }})
           body: |
             Custom build of Reynard ${{ steps.version.outputs.version }} from commit ${{ steps.version.outputs.build }}.
-            Includes the customizable bottom toolbar (Settings > Appearance > Customize Toolbar).
+            Built automatically from the latest upstream commit that passed its own nightly or release build.
           make_latest: true
           fail_on_unmatched_files: true
           files: dist/Reynard.ipa

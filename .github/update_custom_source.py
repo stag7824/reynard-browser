@@ -57,7 +57,7 @@ def main() -> None:
     template["name"] = "Reynard Browser (Custom Builds)"
     template["identifier"] = f"io.github.{owner}.reynard-custom"
     template["website"] = f"https://github.com/{repo}" if repo else template.get("website")
-    template["subtitle"] = "Custom Reynard builds with a customizable toolbar"
+    template["subtitle"] = "Reynard builds that follow upstream automatically"
 
     app = template["apps"][0]
     app["name"] = "Reynard (Custom)"
