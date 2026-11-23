@@ -66,9 +66,22 @@ jobs:
           files: dist/Reynard.ipa
 
       - name: Generate SideStore source
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
         run: |
-          gh api "repos/$REPO/releases" --paginate --jq '.[]' > releases.jsonl
-          python3 .github/update_custom_source.py releases.jsonl dist/source.json
+          # The releases API can lag behind a release that was just published, so retry
+          # until the new release and its IPA show up in the generated source.
+          for attempt in $(seq 1 12); do
+            gh api "repos/$REPO/releases" --paginate --jq '.[]' > releases.jsonl
+            python3 .github/update_custom_source.py releases.jsonl dist/source.json
+            if grep -q "/download/$TAG/Reynard.ipa" dist/source.json; then
+              exit 0
+            fi
+            echo "Release $TAG not listed yet (attempt $attempt), retrying..."
+            sleep 10
+          done
+          echo "Release $TAG never appeared in the releases API" >&2
+          exit 1
 
       - name: Publish SideStore source
         uses: softprops/action-gh-release@v2
