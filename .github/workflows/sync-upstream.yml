@@ -86,7 +86,12 @@ jobs:
 
           if git merge-base --is-ancestor "$UPSTREAM_SHA" HEAD; then
             echo "Upstream $UPSTREAM_SHA is already merged."
-            if [ "$FORCE_BUILD" = "true" ]; then
+            # Build anyway if this branch's current commit never got a published release,
+            # e.g. because an earlier build could not get a macOS runner.
+            version=$(sed -n 's/^CURRENT_VERSION = //p' browser/Configuration/Reynard.xcconfig)
+            tag="custom-$version-$(git rev-parse --short=7 HEAD)"
+            if [ "$FORCE_BUILD" = "true" ] || ! gh release view "$tag" --repo "$REPO" >/dev/null 2>&1; then
+              echo "No release $tag yet (or forced); building."
               echo "build=true" >> "$GITHUB_OUTPUT"
             else
               echo "build=false" >> "$GITHUB_OUTPUT"

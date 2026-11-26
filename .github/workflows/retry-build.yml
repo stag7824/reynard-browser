@@ -37,6 +37,13 @@ jobs:
             --jq '[.jobs[] | select(.conclusion == "failure" or .conclusion == "cancelled" or .conclusion == "timed_out") | .name]')
           echo "Failed jobs: $failed"
           if echo "$failed" | grep -q "Build Standard"; then
+            if gh api "repos/$REPO/actions/runs/$RUN_ID/attempts/$ATTEMPT/jobs" --jq '.jobs[].id' \
+              | xargs -I{} gh api "repos/$REPO/check-runs/{}/annotations" --jq '.[].message' 2>/dev/null \
+              | grep -q "not acquired by Runner"; then
+              # No macOS runner was free; give GitHub time to free capacity before retrying.
+              echo "No runner was available; waiting 2 hours before retrying."
+              sleep 7200
+            fi
             gh run rerun "$RUN_ID" --repo "$REPO" --failed
             echo "Started attempt $((ATTEMPT + 1))."
           else
