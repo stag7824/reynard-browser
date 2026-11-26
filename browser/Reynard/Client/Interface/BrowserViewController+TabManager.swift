@@ -25,6 +25,7 @@ extension BrowserViewController: TabManagerDelegate {
         
         refreshAddressBar()
         updateNavigationButtons()
+        updatePageActionButtons()
         
         if !tabOverview.isPresented {
             tabOverview.setMode(TabOverview.Mode(tabMode: tabManager.selectedTabMode), animated: false)
@@ -69,6 +70,7 @@ extension BrowserViewController: TabManagerDelegate {
         refreshAddressBar()
         browserChrome.updatePageZoomLevel(tab.session.settings.pageZoom.level)
         updateNavigationButtons()
+        updatePageActionButtons()
         
         if !tabOverview.isPresented && !tabOverview.isTransitionRunning {
             tabOverview.setMode(TabOverview.Mode(tabMode: tabManager.selectedTabMode), animated: false)
@@ -141,10 +143,11 @@ extension BrowserViewController: TabManagerDelegate {
                 browserChrome.addressBar.clearKeyCommandHint()
                 contentView.resetScrollTracking()
                 toolbarController.reset(preserveManualCollapse: true)
-                contentView.noteHistoryLocationChange()
+                contentView.noteHistoryLocationChange(isLoading: tab.state.loadingState.isLoading)
                 refreshAddressBar()
                 browserChrome.updatePageZoomLevel(tab.session.settings.pageZoom.level)
                 updateNavigationButtons()
+                updatePageActionButtons()
                 homepageOverlayCoordinator.updatePresentation(animated: true)
                 requestHomepageAddressBarFocus()
             }
@@ -209,9 +212,15 @@ extension BrowserViewController: TabManagerDelegate {
             
             contentView.setPageBackgroundColor(sessionManager.pageBackgroundColor(for: tab.session))
             
+        case .firstContentfulPaint:
+            if isSelectedTab {
+                contentView.finishHistoryLoad()
+            }
+            
         case .readerMode:
             if isSelectedTab {
                 refreshAddressBar()
+                updatePageActionButtons()
             }
             
         case .audio:
