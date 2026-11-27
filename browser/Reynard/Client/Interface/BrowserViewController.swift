@@ -52,6 +52,15 @@ final class BrowserViewController: UIViewController {
                 }
                 
                 self.browserChrome.showActionBar(.findInPage(query: query), animated: true)
+            },
+            onSearch: { [weak self] session, query in
+                guard let self,
+                      self.tabManager.selectedTab?.session === session,
+                      let url = URL(string: SearchEngine.destination(for: query)) else {
+                    return
+                }
+                
+                self.openURLFromHomepage(url, disposition: .newTab)
             }
         )
     )

@@ -13,15 +13,18 @@ final class SelectionActionPresenter: SelectionActionPresenting {
     private var menuHosts: [ObjectIdentifier: SelectionActionMenuHostView] = [:]
     private let onMenuDismissed: (GeckoSession) -> Void
     private let onFindInPage: (GeckoSession, String) -> Void
+    private let onSearch: (GeckoSession, String) -> Void
     
     // MARK: - Lifecycle
     
     init(
         onMenuDismissed: @escaping (GeckoSession) -> Void,
-        onFindInPage: @escaping (GeckoSession, String) -> Void
+        onFindInPage: @escaping (GeckoSession, String) -> Void,
+        onSearch: @escaping (GeckoSession, String) -> Void
     ) {
         self.onMenuDismissed = onMenuDismissed
         self.onFindInPage = onFindInPage
+        self.onSearch = onSearch
         _ = Self.systemUIDismissalHook
     }
     
@@ -84,7 +87,8 @@ final class SelectionActionPresenter: SelectionActionPresenting {
         
         let host = SelectionActionMenuHostView(
             onDismissed: onMenuDismissed,
-            onFindInPage: onFindInPage
+            onFindInPage: onFindInPage,
+            onSearch: onSearch
         )
         menuHosts[key] = host
         return host
