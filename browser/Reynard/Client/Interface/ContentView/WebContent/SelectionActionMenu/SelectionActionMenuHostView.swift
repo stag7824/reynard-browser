@@ -16,6 +16,7 @@ final class SelectionActionMenuHostView: UITextView {
     private var menuInteraction: UIInteraction?
     private let onDismissed: (GeckoSession) -> Void
     private let onFindInPage: (GeckoSession, String) -> Void
+    private let onSearch: (GeckoSession, String) -> Void
     
     override var canBecomeFirstResponder: Bool {
         true
@@ -54,6 +55,10 @@ final class SelectionActionMenuHostView: UITextView {
             return selectedRange.length > 0
         }
         
+        if action == #selector(searchSelectedText(_:)) {
+            return searchQuery != nil
+        }
+        
         return super.canPerformAction(action, withSender: sender)
     }
     
@@ -77,10 +82,12 @@ final class SelectionActionMenuHostView: UITextView {
     
     init(
         onDismissed: @escaping (GeckoSession) -> Void,
-        onFindInPage: @escaping (GeckoSession, String) -> Void
+        onFindInPage: @escaping (GeckoSession, String) -> Void,
+        onSearch: @escaping (GeckoSession, String) -> Void
     ) {
         self.onDismissed = onDismissed
         self.onFindInPage = onFindInPage
+        self.onSearch = onSearch
         super.init(frame: .zero, textContainer: nil)
         configureAppearance()
     }
@@ -156,6 +163,9 @@ final class SelectionActionMenuHostView: UITextView {
             
             let menuController = UIMenuController.shared
             menuController.hideMenu(from: self)
+            menuController.menuItems = [
+                UIMenuItem(title: searchActionTitle, action: #selector(searchSelectedText(_:))),
+            ]
             menuController.arrowDirection = .down
             menuController.showMenu(from: self, rect: bounds)
         }
@@ -203,6 +213,55 @@ final class SelectionActionMenuHostView: UITextView {
         onFindInPage(session, selection)
     }
     
+    @objc private func searchSelectedText(_ sender: Any?) {
+        guard let session, let query = searchQuery else {
+            return
+        }
+        
+        hideMenu()
+        onSearch(session, query)
+    }
+    
+    /// The selected text as a single-line search query, or nil if there is nothing to search for.
+    private var searchQuery: String? {
+        guard let range = selectedTextRange,
+              let selection = text(in: range) else {
+            return nil
+        }
+        
+        let query = selection
+            .components(separatedBy: .whitespacesAndNewlines)
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+        return query.isEmpty ? nil : query
+    }
+    
+    private var searchActionTitle: String {
+        let engine = Prefs.SearchSettings.searchEngine
+        guard engine != .custom else {
+            return NSLocalizedString("Search", comment: "Text selection menu action")
+        }
+        
+        return String.localizedStringWithFormat(
+            NSLocalizedString("Search with %@", comment: "Text selection menu action; %@ is the search engine name"),
+            engine.displayName
+        )
+    }
+    
+    @available(iOS 16.0, *)
+    fileprivate func makeSearchAction() -> UIAction? {
+        guard searchQuery != nil else {
+            return nil
+        }
+        
+        return UIAction(
+            title: searchActionTitle,
+            image: UIImage(named: "reynard.magnifyingglass")
+        ) { [weak self] _ in
+            self?.searchSelectedText(nil)
+        }
+    }
+    
     private func executeAction(_ commandId: String) {
         guard let session, let actionId else {
             return
@@ -220,5 +279,20 @@ extension SelectionActionMenuHostView: UIEditMenuInteractionDelegate {
         targetRectFor configuration: UIEditMenuConfiguration
     ) -> CGRect {
         return bounds
+    }
+    
+    func editMenuInteraction(
+        _ interaction: UIEditMenuInteraction,
+        menuFor configuration: UIEditMenuConfiguration,
+        suggestedActions: [UIMenuElement]
+    ) -> UIMenu? {
+        guard let searchAction = makeSearchAction() else {
+            return UIMenu(children: suggestedActions)
+        }
+        
+        // Place Search right after the first group (Copy / Select All), like other browsers.
+        var children = suggestedActions
+        children.insert(searchAction, at: min(1, children.count))
+        return UIMenu(children: children)
     }
 }
