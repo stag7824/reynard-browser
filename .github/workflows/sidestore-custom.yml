@@ -20,17 +20,41 @@ env:
   BUILD_REF: ${{ inputs.ref || github.sha }}
 
 jobs:
+  version:
+    name: Determine version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.BUILD_REF }}
+          fetch-depth: 0
+
+      - name: Determine version
+        id: version
+        run: |
+          # SideStore only offers an update when the version number changes, so give every
+          # build a unique, increasing version: <upstream version>.<commit count of this branch>.
+          base=$(sed -n 's/^CURRENT_VERSION = //p' browser/Configuration/Reynard.xcconfig)
+          count=$(git rev-list --count HEAD)
+          echo "version=$base.$count" >> "$GITHUB_OUTPUT"
+          echo "Version: $base.$count"
+
   build:
+    needs: version
     uses: ./.github/workflows/build.yml
     with:
       checkout_ref: ${{ inputs.ref || github.sha }}
+      version_override: ${{ needs.version.outputs.version }}
       build_normal_ipa: true
       build_trollstore_tipa: false
       build_jailbroken_ipa: false
 
   release:
     name: Publish release and SideStore source
-    needs: build
+    needs: [version, build]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -52,7 +76,7 @@ jobs:
       - name: Determine version
         id: version
         run: |
-          version=$(sed -n 's/^CURRENT_VERSION = //p' browser/Configuration/Reynard.xcconfig)
+          version="${{ needs.version.outputs.version }}"
           build=$(echo "$BUILD_REF" | cut -c1-7)
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "build=$build" >> "$GITHUB_OUTPUT"

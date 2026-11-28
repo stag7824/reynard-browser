@@ -27,6 +27,11 @@ on:
         required: false
         default: true
         type: boolean
+      version_override:
+        description: Replace CURRENT_VERSION before building the app (custom builds)
+        required: false
+        default: ''
+        type: string
 
 permissions:
   contents: read
@@ -165,6 +170,12 @@ jobs:
 
       - name: Install packaging dependencies
         run: brew install ldid
+
+      - name: Override app version
+        if: ${{ inputs.version_override != '' }}
+        env:
+          VERSION_OVERRIDE: ${{ inputs.version_override }}
+        run: sed -i '' -E "s/^CURRENT_VERSION = .*/CURRENT_VERSION = $VERSION_OVERRIDE/" browser/Configuration/Reynard.xcconfig
 
       - name: Build app
         run: ./tools/release/build-app.sh --no-signing ${{ inputs.nightly && '--nightly' || '' }}

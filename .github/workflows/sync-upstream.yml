@@ -88,10 +88,10 @@ jobs:
             echo "Upstream $UPSTREAM_SHA is already merged."
             # Build anyway if this branch's current commit never got a published release,
             # e.g. because an earlier build could not get a macOS runner.
-            version=$(sed -n 's/^CURRENT_VERSION = //p' browser/Configuration/Reynard.xcconfig)
-            tag="custom-$version-$(git rev-parse --short=7 HEAD)"
-            if [ "$FORCE_BUILD" = "true" ] || ! gh release view "$tag" --repo "$REPO" >/dev/null 2>&1; then
-              echo "No release $tag yet (or forced); building."
+            short_sha=$(git rev-parse --short=7 HEAD)
+            released=$(gh api "repos/$REPO/releases" --paginate --jq ".[].tag_name | select(startswith(\"custom-\") and endswith(\"-$short_sha\"))")
+            if [ "$FORCE_BUILD" = "true" ] || [ -z "$released" ]; then
+              echo "No release for $short_sha yet (or forced); building."
               echo "build=true" >> "$GITHUB_OUTPUT"
             else
               echo "build=false" >> "$GITHUB_OUTPUT"
